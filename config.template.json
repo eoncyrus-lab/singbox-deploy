@@ -1,0 +1,95 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true,
+    "output": "__LOG_FILE__"
+  },
+  "dns": {
+    "servers": [
+      { "tag": "bootstrap", "type": "local" },
+      { "tag": "doh-cn", "type": "https", "server": "doh.pub", "server_port": 443, "path": "/dns-query", "domain_resolver": "bootstrap" },
+      { "tag": "dns-proxy", "type": "tls", "server": "8.8.8.8", "server_port": 853, "detour": "__NODE_TAG__" },
+      { "tag": "fakeip", "type": "fakeip", "inet4_range": "198.18.0.0/15" }
+    ],
+    "rules": [
+      { "clash_mode": "direct", "server": "doh-cn" },
+      { "clash_mode": "global", "server": "dns-proxy" },
+      { "rule_set": "geosite-category-ads-all", "action": "reject" },
+      { "rule_set": ["geosite-cn", "geosite-apple", "geosite-microsoft"], "server": "doh-cn" },
+      { "query_type": "AAAA", "action": "reject" },
+      { "query_type": "A", "server": "fakeip" }
+    ],
+    "final": "dns-proxy",
+    "strategy": "prefer_ipv4",
+    "independent_cache": true
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": ["__TUN_CIDR__"],
+      "mtu": "__MTU__",
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "gvisor",
+      "route_exclude_address": ["__NODE_HOST__/32"]
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": "__MIXED_PORT__",
+      "set_system_proxy": true
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "hysteria2",
+      "tag": "__NODE_TAG__",
+      "server": "__NODE_HOST__",
+      "server_port": "__NODE_PORT__",
+      "password": "__NODE_PASSWORD__",
+      "up_mbps": "__UP_MBPS__",
+      "down_mbps": "__DOWN_MBPS__",
+      "tls": { "enabled": true, "insecure": "__TLS_INSECURE__" }
+    },
+    {
+      "type": "urltest",
+      "tag": "auto",
+      "outbounds": ["__NODE_TAG__"],
+      "url": "http://www.gstatic.com/generate_204",
+      "interval": "5m",
+      "tolerance": 50
+    },
+    { "type": "direct", "tag": "direct" }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "final": "auto",
+    "default_domain_resolver": "bootstrap",
+    "rules": [
+      { "action": "sniff", "timeout": "300ms" },
+      { "protocol": "dns", "action": "hijack-dns" },
+      { "action": "resolve", "strategy": "prefer_ipv4" },
+      { "clash_mode": "direct", "outbound": "direct" },
+      { "clash_mode": "global", "outbound": "auto" },
+      { "protocol": "bittorrent", "outbound": "direct" },
+      { "ip_is_private": true, "outbound": "direct" },
+      { "domain_suffix": ["local", "localhost"], "outbound": "direct" },
+      { "rule_set": "geosite-category-ads-all", "action": "reject" },
+      { "rule_set": ["geosite-openai", "geosite-anthropic", "geosite-category-ai-chat-!cn"], "outbound": "auto" },
+      { "rule_set": ["geosite-google", "geosite-github", "geosite-telegram", "geosite-twitter", "geosite-youtube"], "outbound": "auto" },
+      { "rule_set": ["geosite-cn", "geoip-cn"], "outbound": "direct" }
+    ],
+    "rule_set": []
+  },
+  "experimental": {
+    "cache_file": { "enabled": true, "store_fakeip": true, "store_rdrc": true },
+    "clash_api": {
+      "external_controller": "127.0.0.1:__CLASH_PORT__",
+      "external_ui": "",
+      "secret": "__CLASH_SECRET__",
+      "default_mode": "rule"
+    }
+  }
+}
