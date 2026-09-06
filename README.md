@@ -22,8 +22,8 @@ source ~/.zshrc && vpn status
 |---|---|
 | **装到另一台机器 / 给别人装** | 本文 |
 | **从零搭一个节点**（服务端） | `SERVER.md` |
-| **搞懂每个配置为什么这么写** | `~/singbox-setup.md` |
-| **日常用**（启停、切模式、排障） | `~/singbox-usage.md` |
+| **搞懂每个配置为什么这么写** | `~/singbox/setup.md` |
+| **日常用**（启停、切模式、排障） | `~/singbox/usage.md` |
 
 ---
 
@@ -271,4 +271,4 @@ vpn mtu 1420                    # 改 MTU（自动校验 + 重启）
 | `SERVER.md` | 服务端 Hysteria2 从零搭建（情况 C 看这个） |
 | `README.md` | 本文 |
 
-单机的配置原理逐条解释、路由规则表、日常故障排查，见 `~/singbox-setup.md`。
+单机的配置原理逐条解释、路由规则表、日常故障排查，见 `~/singbox/setup.md`。
