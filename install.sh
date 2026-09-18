@@ -2,7 +2,7 @@
 # sing-box 一键部署（macOS）
 # 用法：
 #   SB_NODE_HOST=1.2.3.4 SB_NODE_PASSWORD='xxx' ./install.sh
-#   ./install.sh --profile bilibili        # 额外注入 B 站内网直连规则
+#   ./install.sh --profile work            # 注入自定义工作/内网直连规则
 #   ./install.sh --dry-run                 # 只渲染配置并校验，不动系统
 set -euo pipefail
 
@@ -36,6 +36,10 @@ done
 : "${SB_TUN_CIDR:=172.19.0.1/30}"
 : "${SB_MTU:=1400}"
 : "${SB_CONFIG:=$HOME/singbox-config.json}"
+: "${SB_WORK_INTERNAL_DOMAINS:=}"
+: "${SB_WORK_DIRECT_DOMAINS:=}"
+: "${SB_WORK_BYPASS_DOMAINS:=}"
+: "${SB_WORK_PROBE_URL:=}"
 
 prompt() {  # prompt VAR "提示语" [silent]
   local var="$1" msg="$2" silent="${3:-}" val
@@ -94,6 +98,8 @@ SB_NODE_PASSWORD="$SB_NODE_PASSWORD" SB_NODE_TAG="$SB_NODE_TAG" \
 SB_UP_MBPS="$SB_UP_MBPS" SB_DOWN_MBPS="$SB_DOWN_MBPS" SB_TLS_INSECURE="$SB_TLS_INSECURE" \
 SB_MIXED_PORT="$SB_MIXED_PORT" SB_CLASH_PORT="$SB_CLASH_PORT" SB_CLASH_SECRET="$SB_CLASH_SECRET" \
 SB_TUN_CIDR="$SB_TUN_CIDR" SB_MTU="$SB_MTU" SB_LOG="$SB_LOG" PROFILE="$PROFILE" \
+SB_WORK_INTERNAL_DOMAINS="$SB_WORK_INTERNAL_DOMAINS" SB_WORK_DIRECT_DOMAINS="$SB_WORK_DIRECT_DOMAINS" \
+SB_WORK_BYPASS_DOMAINS="$SB_WORK_BYPASS_DOMAINS" SB_WORK_PROBE_URL="$SB_WORK_PROBE_URL" \
 python3 "$HERE/render.py" "$HERE/config.template.json" > "$RENDERED"
 ok "已渲染 ($(wc -c < "$RENDERED" | tr -d ' ') 字节, profile=$PROFILE)"
 
@@ -170,20 +176,19 @@ else
   ok "已追加 source 行到 ~/.zshrc（原文件已备份）"
 fi
 
-if [[ "$PROFILE" == "bilibili" ]]; then
-  cat > "$CFG_DIR/bypass.local" <<'EOF'
-*.bilibili.co
-*.bilibili.com
-*.bilibili.net
-*.bilibili.tv
-*.bilivideo.com
-*.hdslb.com
-*.acgvideo.com
-*.biliapi.net
-*.b23.tv
-EOF
-  echo "https://git.bilibili.co" > "$CFG_DIR/probe.local"
-  ok "已写入 B 站内网绕过列表 + 连通性探针"
+if [[ "$PROFILE" == "work" ]]; then
+  if [[ -n "$SB_WORK_BYPASS_DOMAINS" ]]; then
+    IFS=',' read -r -a _work_bypass <<< "$SB_WORK_BYPASS_DOMAINS"
+    printf '%s\n' "${_work_bypass[@]}" > "$CFG_DIR/bypass.local"
+    ok "已写入 work profile 系统代理绕过列表"
+  else
+    warn "work profile 未设置 SB_WORK_BYPASS_DOMAINS；不会生成 bypass.local"
+  fi
+
+  if [[ -n "$SB_WORK_PROBE_URL" ]]; then
+    printf '%s\n' "$SB_WORK_PROBE_URL" > "$CFG_DIR/probe.local"
+    ok "已写入 work profile 连通性探针"
+  fi
 fi
 
 # ---------- 6. 启动 ----------
