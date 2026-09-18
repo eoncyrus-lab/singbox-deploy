@@ -3,7 +3,7 @@
 
 - 替换 __XXX__ 占位符，并把数值/布尔占位符还原成 JSON 原生类型
 - 生成 13 条远程 rule_set（download_detour 指向本次的节点 tag）
-- --profile bilibili 时注入 B 站/内网直连规则
+- --profile work 时按环境变量注入自定义工作/内网直连规则
 所有参数从环境变量读，见 install.sh。
 """
 import json, os, sys
@@ -11,6 +11,9 @@ import json, os, sys
 TPL = sys.argv[1]
 tag = os.environ["SB_NODE_TAG"]
 host = os.environ["SB_NODE_HOST"]
+
+def csv_env(name):
+    return [v.strip().lstrip(".") for v in os.environ.get(name, "").split(",") if v.strip()]
 
 STR_SUBS = {
     "__NODE_TAG__": tag,
@@ -84,23 +87,30 @@ rs.append({"tag": "geoip-cn", "type": "remote", "format": "binary",
            "download_detour": tag, "update_interval": "7d"})
 cfg["route"]["rule_set"] = rs
 
-# --- profile: bilibili ---
-# 规则集是远程下载的，首次启动/断网时还没到位；把内网和自家域名硬编码进规则，
-# 保证任何时候都直连（走代理 100% 失败，还会把内网主机名泄漏给境外节点）。
-if os.environ.get("PROFILE") == "bilibili":
-    BILI = ["bilibili.com", "bilibili.cn", "bilibili.tv", "bilivideo.com", "bilivideo.cn",
-            "hdslb.com", "biliapi.net", "acg.tv", "b23.tv", "maoer.co", "missevan.com"]
-    # 内网域必须用系统 DNS（只有内网 DNS 有记录），绝不能走 doh.pub
+# --- profile: work ---
+# 内网域名由调用者通过环境变量提供，真实组织信息不需要写进仓库。
+# INTERNAL 域使用系统 DNS；DIRECT 域使用国内 DoH。两类都强制直连。
+if os.environ.get("PROFILE") == "work":
+    internal_domains = csv_env("SB_WORK_INTERNAL_DOMAINS")
+    direct_domains = csv_env("SB_WORK_DIRECT_DOMAINS")
+
     dns_rules = cfg["dns"]["rules"]
-    idx = next(i for i, r in enumerate(dns_rules) if r.get("query_type") == "AAAA")
-    dns_rules[idx:idx] = [
-        {"domain_suffix": ["bilibili.co"], "server": "bootstrap"},
-        {"domain_suffix": BILI, "server": "doh-cn"},
-    ]
-    route_rules = cfg["route"]["rules"]
-    idx = next(i for i, r in enumerate(route_rules)
-               if "geosite-openai" in (r.get("rule_set") or []))
-    route_rules.insert(idx, {"domain_suffix": ["bilibili.co"] + BILI, "outbound": "direct"})
+    dns_insert = next(i for i, r in enumerate(dns_rules) if r.get("query_type") == "AAAA")
+    extra_dns = []
+    if internal_domains:
+        extra_dns.append({"domain_suffix": internal_domains, "server": "bootstrap"})
+    if direct_domains:
+        extra_dns.append({"domain_suffix": direct_domains, "server": "doh-cn"})
+    dns_rules[dns_insert:dns_insert] = extra_dns
+
+    all_direct = list(dict.fromkeys(internal_domains + direct_domains))
+    if all_direct:
+        route_rules = cfg["route"]["rules"]
+        route_insert = next(i for i, r in enumerate(route_rules)
+                            if "geosite-openai" in (r.get("rule_set") or []))
+        route_rules.insert(route_insert, {"domain_suffix": all_direct, "outbound": "direct"})
+    else:
+        print("warn: work profile 未配置任何域名；不会注入额外 DNS/路由规则。", file=sys.stderr)
 
 json.dump(cfg, sys.stdout, ensure_ascii=False, indent=2)
 print()
