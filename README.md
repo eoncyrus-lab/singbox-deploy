@@ -107,18 +107,27 @@ SB_NODE_HOST=1.2.3.4 SB_NODE_PASSWORD='xxx' ./install.sh --dry-run
 
 ### profile
 
+默认使用 `generic`。如果需要公司/实验室内网，可使用通用的 `work` profile：
+
 ```bash
-./install.sh --profile bilibili
+SB_WORK_INTERNAL_DOMAINS="corp.example.com,git.corp.example.com" \
+SB_WORK_DIRECT_DOMAINS="example.com,cdn.example.com" \
+SB_WORK_BYPASS_DOMAINS="*.corp.example.com,*.example.com" \
+SB_WORK_PROBE_URL="https://git.corp.example.com" \
+./install.sh --profile work
 ```
 
-额外注入 B 站域名 + 公司内网（`.bilibili.co`）的直连规则和绕过列表。
-**外部使用者用默认的 `generic` 即可**，别带这个 —— 那是特定公司网络环境的特化。
+- `SB_WORK_INTERNAL_DOMAINS`：只能由本地/内网 DNS 解析的域名，强制使用系统 DNS，并直连。
+- `SB_WORK_DIRECT_DOMAINS`：可由公网 DNS 解析、但希望直连的域名。
+- `SB_WORK_BYPASS_DOMAINS`：写入 macOS 系统代理 bypass 列表，逗号分隔。
+- `SB_WORK_PROBE_URL`：可选；`vpn status` 时额外检查的内网页面。
 
-需要自己公司的内网规则，装完后编辑两个文件（不用改脚本）：
+这些值只在安装时读取，不需要把真实公司域名提交到仓库。也可以安装后手动维护：
 
 ```bash
 ~/.config/singbox-deploy/bypass.local   # 每行一条，GUI 系统代理绕过用
-~/.config/singbox-deploy/env            # 改 SB_NO_PROXY_EXTRA，CLI 用
+~/.config/singbox-deploy/env            # SB_NO_PROXY_EXTRA，CLI 用
+~/.config/singbox-deploy/probe.local    # 可选的连通性探针 URL
 ```
 
 ### 装完之后
@@ -213,7 +222,7 @@ vpn mtu 1420                    # 改 MTU（自动校验 + 重启）
 | 节点用域名，某天突然全网断 | 域名背后的 IP 变了，`route_exclude_address` 里还是旧 IP | 重跑 `install.sh`（渲染期会重新解析）|
 | `172.19.0.1` 网段冲突 | 对方机器已有 VPN/Docker 占了该段 | `SB_TUN_CIDR=172.31.9.1/30 ./install.sh` |
 | 6152/6170 端口被占 | 装了 Surge/ClashX/其它代理 | 脚本会检测并报错；`SB_MIXED_PORT=7152 ./install.sh` |
-| 装完能上外网，公司内网全挂 | 用了 `--profile bilibili` 以外的环境，没配内网绕过 | 填 `bypass.local` + `SB_NO_PROXY_EXTRA` |
+| 装完能上外网，公司内网全挂 | 未配置 `work` profile 或缺少内网绕过域名 | 设置 `SB_WORK_INTERNAL_DOMAINS` / `SB_WORK_BYPASS_DOMAINS`，或手动填 `bypass.local` + `SB_NO_PROXY_EXTRA` |
 | 对方用 bash 不是 zsh | `vpn.zsh` 里用了 zsh 数组语法 | 见 §7 |
 | Hysteria2 连不上，TCP 能通 | 云厂商安全组只放了 TCP 443 | 放行 **UDP** 443 |
 | 多人共用节点后集体变慢 | 单密码无法计量，带宽被某人跑满 | 改 userpass 一人一条，见 §1 |
